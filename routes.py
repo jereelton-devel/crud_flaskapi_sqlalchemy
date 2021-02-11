@@ -1,24 +1,8 @@
-from flask import Flask, Response, request
-from flask_sqlalchemy import SQLAlchemy
-from flask_cors.decorator import cross_origin
-import mysql.connector
-import json
 from sources import *
-
-app = Flask(__name__)
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://devel:123mudar@localhost/localtests'
-
-db = SQLAlchemy(app)
+from generic_sources import *
 
 
-class TbUser(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50))
-    email = db.Column(db.String(100))
-
-    def to_json(self):
-        return {"id": self.id, "name": self.name, "email": self.email}
+"""API Routes"""
 
 
 # List all
@@ -28,8 +12,17 @@ def select_user():
     users = TbUser.query.all()
     users_list = [user.to_json() for user in users]
     print(users_list)
+    print(len(users_list))
 
-    return response_generator(
+    if len(users_list) == 0:
+        return GenericSource.response_generator(
+            '404',
+            'users',
+            users_list,
+            'Users Not Found !'
+        )
+
+    return GenericSource.response_generator(
         '200',
         'users',
         users_list,
@@ -40,7 +33,7 @@ def select_user():
 @app.route("/users", methods=["POST"])
 @cross_origin()
 def method_blocked_users():
-    return response_generator(
+    return GenericSource.response_generator(
         '400',
         'error',
         False,
@@ -55,39 +48,12 @@ def select_one_user(_id):
     user = TbUser.query.filter_by(id=_id).first()
     user_list = user.to_json()
 
-    return response_generator(
+    return GenericSource.response_generator(
         '200',
         'user',
         user_list,
         'User listed successfully'
     )
-
-
-# Create item
-@app.route("/useradd", methods=["POST"])
-@cross_origin()
-def user_create():
-    param = request.get_json()
-
-    try:
-        create_user = TbUser(name=param["name"], email=param["email"])
-        db.session.add(create_user)
-        db.session.commit()
-
-        return response_generator(
-                '200',
-                'user',
-                param["name"],
-                'User Created successfully !'
-            )
-
-    except Exception as er:
-        return response_generator(
-            '500',
-            'exception',
-            er,
-            'Internal Server Error !'
-        )
 
 
 # Update data
@@ -107,7 +73,7 @@ def update_user(_id):
             db.session.add(up_user)
             db.session.commit()
 
-        return response_generator(
+        return GenericSource.response_generator(
                 '200',
                 'user',
                 param["name"],
@@ -115,7 +81,7 @@ def update_user(_id):
             )
 
     except Exception as er:
-        return response_generator(
+        return GenericSource.response_generator(
             '500',
             'exception',
             er,
@@ -130,7 +96,7 @@ def user_delete(_id):
     delete_user = TbUser.query.filter_by(id=_id).first()
 
     if delete_user is None:
-        return response_generator(
+        return GenericSource.response_generator(
             '404',
             'error',
             delete_user,
@@ -141,7 +107,7 @@ def user_delete(_id):
         db.session.delete(delete_user)
         db.session.commit()
 
-        return response_generator(
+        return GenericSource.response_generator(
                 '200',
                 'user',
                 delete_user.name,
@@ -149,7 +115,7 @@ def user_delete(_id):
             )
 
     except Exception as er:
-        return response_generator(
+        return GenericSource.response_generator(
             '500',
             'exception',
             er,
@@ -157,16 +123,116 @@ def user_delete(_id):
         )
 
 
-# Not Permission
-@app.route("/")
+# ---------------------------------------------------------------------------------------------
+# CREATE
+# ---------------------------------------------------------------------------------------------
+
+@app.route("/create/full", methods=["POST"])
+@cross_origin()
+def create_table():
+
+    try:
+
+        create_tb = TbUser.create_full()
+
+        return GenericSource.response_generator(
+            GenericSource.success_status,
+            "result",
+            create_tb,
+            "Table created successfully !"
+        )
+
+    except NameError as ner:
+
+        return GenericSource.response_generator(
+            GenericSource.error_internal_server,
+            "error",
+            ner,
+            "Internal Server Error !"
+        )
+
+
+@app.route("/create/full", methods=["PUT", "GET", "DELETE", "PATCH"])
+@cross_origin()
+def create_table_locked_method():
+    return GenericSource.locked_methods(GenericSource.error_not_allowed)
+
+
+@app.route("/useradd", methods=["POST"])
+@cross_origin()
+def user_create():
+    param = request.get_json()
+
+    try:
+        create_user = TbUser().create_user(param["name"], param["email"])
+
+        return GenericSource.response_generator(
+                GenericSource.success_status,
+                'user',
+                param["name"],
+                'User Created successfully !'
+            )
+
+    except Exception as er:
+        return GenericSource.response_generator(
+            GenericSource.error_internal_server,
+            'exception',
+            er,
+            'Internal Server Error !'
+        )
+
+
+@app.route("/useradd", methods=["GET", "PUT", "DELETE", "PATCH"])
+@cross_origin()
+def user_create_locked_method():
+    return GenericSource.locked_methods(GenericSource.error_not_allowed)
+
+
+# ---------------------------------------------------------------------------------------------
+# DELETE
+# ---------------------------------------------------------------------------------------------
+
+@app.route("/delete/full", methods=["DELETE"])
+@cross_origin()
+def delete_table():
+
+    try:
+
+        delete_tb = TbUser.delete_full()
+
+        return GenericSource.response_generator(
+            GenericSource.success_status,
+            "result",
+            delete_tb,
+            "Table deleted successfully !"
+        )
+
+    except NameError as ner:
+
+        return GenericSource.response_generator(
+            GenericSource.error_internal_server,
+            "error",
+            ner,
+            "Internal Server Error !"
+        )
+
+
+@app.route("/delete/full", methods=["GET", "PUT", "POST", "PATCH"])
+@cross_origin()
+def delete_table_locked_method():
+    return GenericSource.locked_methods(GenericSource.error_not_allowed)
+
+
+# ---------------------------------------------------------------------------------------------
+# EXTRA: Not Permission
+# ---------------------------------------------------------------------------------------------
+
+@app.route("/", methods=["GET", "PUT", "POST", "PATCH", "DELETE"])
 @cross_origin()
 def access_denied():
-    return response_generator(
-        403,
+    return GenericSource.response_generator(
+        GenericSource.error_access_denied,
         "error",
         False,
         "Access Denied !"
     )
-
-
-# db.create_all()
