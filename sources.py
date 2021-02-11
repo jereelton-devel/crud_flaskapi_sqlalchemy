@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors.decorator import cross_origin
 import mysql.connector
 import json
+from generic_sources import *
 
 
 """API Resources"""
@@ -16,108 +17,216 @@ db = SQLAlchemy(app)
 
 
 # ---------------------------------------------------------------------------------------------
-# Model: Create tb_user with create_all(), ex: db.create_all()
+# Model and CRUD: Create tb_user with create_all(), ex: db.create_all()
 # ---------------------------------------------------------------------------------------------
 class TbUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50))
     email = db.Column(db.String(100))
 
-    def to_json(self):
-        return {"id": self.id, "name": self.name, "email": self.email}
-
-    @staticmethod
-    def create_full():
-        db.create_all()
-        return True
-
-    @staticmethod
-    def delete_full():
-        db.drop_all()
-        return True
-
     # Create
 
     @staticmethod
-    def create_user(param_name, param_mail):
-        create_user = TbUser(name=param_name, email=param_mail)
-        db.session.add(create_user)
-        commit = db.session.commit()
-        return commit
+    def create_full():
 
+        try:
 
-# ---------------------------------------------------------------------------------------------
-# Data Handle and Connection
-# ---------------------------------------------------------------------------------------------
-class CrudHandler:
-    def __init__(self, _app):
-        self.db_instance(_app)
+            db.create_all()
 
-    def db_instance(self, app):
-        self.db = SQLAlchemy(app)
-        return self.db
+            return GenericSource.response_generator(
+                GenericSource.success_status,
+                "result",
+                True,
+                "Table created successfully !"
+            )
 
-    def to_json(self):
-        return {"id": self.id, "name": self.name, "email": self.email}
+        except NameError as ner:
 
-    def set_id(self, _id):
-        self.id = _id
-
-    def set_name(self, _name):
-        self.name = _name
-
-    def set_name(self, _email):
-        self.email = _email
-
-    def set_all(self, _id, _name, _email):
-        self.id = _id
-        self.name = _name
-        self.email = _email
-
-    def get_all(self):
-        return self.to_json()
-
-    # Read
-    def read_all(self):
-        self.items = self.db.query.all()
-        return self.items
-
-    def read_one(self):
-        self.items = self.db.query.all()
-        return self.items
-
-    # Update
-    def update_user(self):
-        self.items = self.db.query.all()
-        return self.items
-
-    # Delete
-    def delete_user(self):
-        self.items = self.db.query.all()
-        return self.items
-
-
-# ---------------------------------------------------------------------------------------------
-# Create dynamic table by model
-# ---------------------------------------------------------------------------------------------
-class CreateTable:
-    def __init__(self, tb):
-        self.tb = tb
+            return GenericSource.response_generator(
+                GenericSource.error_internal_server,
+                "error",
+                ner,
+                "Internal Server Error !"
+            )
 
     @staticmethod
-    def create_full():
-        db.create_all()
-        return True
+    def create_user(param_name, param_mail):
 
+        try:
 
-# ---------------------------------------------------------------------------------------------
-# Drop table
-# ---------------------------------------------------------------------------------------------
-class DeleteTable:
-    def __init__(self, tb):
-        self.tb = tb
+            create_user = TbUser(name=param_name, email=param_mail)
+            db.session.add(create_user)
+            db.session.commit()
+
+            return GenericSource.response_generator(
+                    GenericSource.success_status,
+                    'user',
+                    param_name,
+                    'User Created successfully !'
+                )
+
+        except Exception as er:
+            return GenericSource.response_generator(
+                GenericSource.error_internal_server,
+                'exception',
+                er,
+                'Internal Server Error !'
+            )
+
+    # Read
+    @staticmethod
+    def read_users(_param):
+
+        if _param != "all" and _param != "full":
+            users = TbUser.query.filter(TbUser.name.like(_param+'%'), TbUser.email.like(_param+'%'))
+        else:
+            users = TbUser.query.all()
+
+        users_list = [user.to_json() for user in users]
+
+        if len(users_list) == 0:
+            return GenericSource.response_generator(
+                GenericSource.error_not_found,
+                'users',
+                users_list,
+                'Users Not Found !'
+            )
+
+        return GenericSource.response_generator(
+            GenericSource.success_status,
+            'users',
+            users_list,
+            'Users listed successfully'
+        )
+
+    @staticmethod
+    def read_user(param):
+        user = TbUser.query.filter_by(id=param).first()
+
+        if user is None:
+            user = TbUser.query.filter(TbUser.name.like(param+'%')).first()
+
+        if user is None:
+            user = TbUser.query.filter(TbUser.email.like(param+'%')).first()
+
+        if user is None:
+            user_list = []
+        else:
+            user_list = user.to_json()
+
+        if len(user_list) == 0:
+            return GenericSource.response_generator(
+                GenericSource.error_not_found,
+                'user',
+                user_list,
+                'User Not Found !'
+            )
+
+        return GenericSource.response_generator(
+            GenericSource.success_status,
+            'user',
+            user_list,
+            'User listed successfully'
+        )
+
+    # Update
+
+    @staticmethod
+    def update_user(param_id, param):
+
+        try:
+
+            up_user = TbUser.query.filter_by(id=param_id).first()
+
+            if up_user is None:
+                return GenericSource.response_generator(
+                    GenericSource.error_not_found,
+                    'user',
+                    param_id,
+                    'User Not Found !'
+                )
+
+            if "name" in param:
+                up_user.name = param["name"]
+
+            if "email" in param:
+                up_user.email = param["email"]
+
+                db.session.add(up_user)
+                db.session.commit()
+
+            return GenericSource.response_generator(
+                GenericSource.success_status,
+                'user',
+                param["name"],
+                'User Updated successfully !'
+            )
+
+        except Exception as er:
+            return GenericSource.response_generator(
+                GenericSource.error_internal_server,
+                'exception',
+                er,
+                'Internal Server Error !'
+            )
+
+    # Delete
 
     @staticmethod
     def delete_full():
-        db.drop_all()
-        return True
+
+        try:
+
+            db.drop_all()
+
+            return GenericSource.response_generator(
+                GenericSource.success_status,
+                "result",
+                True,
+                "Table deleted successfully !"
+            )
+
+        except Exception as er:
+
+            return GenericSource.response_generator(
+                GenericSource.error_internal_server,
+                "error",
+                er,
+                "Internal Server Error !"
+            )
+
+    @staticmethod
+    def delete_user(param_id):
+        user_delete = TbUser.query.filter_by(id=param_id).first()
+
+        if user_delete is None:
+            return GenericSource.response_generator(
+                GenericSource.error_not_found,
+                'user_id',
+                param_id,
+                'User Not Found !'
+            )
+
+        try:
+            db.session.delete(user_delete)
+            db.session.commit()
+
+            return GenericSource.response_generator(
+                GenericSource.success_status,
+                'user',
+                user_delete.name,
+                'User Deleted successfully !'
+            )
+
+        except Exception as er:
+            return GenericSource.response_generator(
+                GenericSource.error_internal_server,
+                'exception',
+                er,
+                'Internal Server Error !'
+            )
+
+    # Generic
+
+    def to_json(self):
+        return {"id": self.id, "name": self.name, "email": self.email}
