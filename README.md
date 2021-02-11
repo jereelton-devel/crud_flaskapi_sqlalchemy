@@ -3,6 +3,7 @@
 
 > API criada em Python para executar as seguintes operações SQL: 
 
+<br />
 * Create
 <br />
 * Read
@@ -10,6 +11,7 @@
 * Update
 <br />
 * Delete
+<hr />
 
 # Informações
 
